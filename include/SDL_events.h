@@ -780,6 +780,15 @@ extern DECLSPEC Uint8 SDLCALL SDL_EventState(Uint32 type, int state);
  */
 extern DECLSPEC Uint32 SDLCALL SDL_RegisterEvents(int numevents);
 
+/**
+ *  Handler for a captured SIGCONT.
+ *
+ *  Pumps and then flushes the event queue as any events contained
+ *
+ *  therein will be stale.
+ */
+extern DECLSPEC void SDLCALL SDL_RecoverFromStopCont(void);
+
 /* Ends C function definitions when using C++ */
 #ifdef __cplusplus
 }

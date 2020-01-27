@@ -32,6 +32,7 @@
 #endif
 #include "../video/SDL_sysvideo.h"
 #include "SDL_syswm.h"
+#include <signal.h>
 
 /* An arbitrary limit so we don't have unbounded growth */
 #define SDL_MAX_QUEUED_EVENTS   65535
@@ -419,6 +420,8 @@ SDL_StartEventLoop(void)
        FIXME: Does this introduce any other bugs with events at startup?
      */
 
+    struct sigaction act;
+
     /* Create the lock and set ourselves active */
 #if !SDL_THREADS_DISABLED
     if (!SDL_EventQ.lock) {
@@ -447,6 +450,11 @@ SDL_StartEventLoop(void)
 
     SDL_AtomicSet(&SDL_EventQ.active, 1);
 
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = SDL_RecoverFromStopCont;
+    act.sa_flags = SA_SIGINFO;
+    sigaction(SIGCONT, &act, NULL);
     return 0;
 }
 
@@ -1018,6 +1026,14 @@ SDL_EventsQuit(void)
     SDL_QuitQuit();
     SDL_StopEventLoop();
     SDL_DelHintCallback(SDL_HINT_EVENT_LOGGING, SDL_EventLoggingChanged, NULL);
+}
+
+/* triggered when receiving SIGCONT and flushes the event queue*/
+void
+SDL_RecoverFromStopCont(void)
+{
+    SDL_PumpEvents();
+    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
 }
 
 /* vi: set ts=4 sw=4 expandtab: */

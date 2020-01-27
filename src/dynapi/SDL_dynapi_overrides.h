@@ -724,3 +724,4 @@
 #define SDL_RWwrite SDL_RWwrite_REAL
 #define SDL_RWclose SDL_RWclose_REAL
 #define SDL_LoadFile SDL_LoadFile_REAL
+#define SDL_RecoverFromStopCont SDL_RecoverFromStopCont_REAL
