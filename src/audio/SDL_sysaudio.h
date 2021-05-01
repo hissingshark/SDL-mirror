@@ -130,6 +130,17 @@ typedef struct SDL_AudioDriver
 /* Define the SDL audio driver structure */
 struct SDL_AudioDevice
 {
+    struct setup_params
+    {
+        //const char *devname; EVERYONE USES NULL - IF ANYTHING - SO FORGET IT
+        int iscapture;
+        SDL_AudioSpec desired;
+        int allowed_changes;
+        int min_id;
+        SDL_bool in_use;
+        SDL_bool switching;
+    } custom;
+
     /* * * */
     /* Data common to all devices */
     SDL_AudioDeviceID id;

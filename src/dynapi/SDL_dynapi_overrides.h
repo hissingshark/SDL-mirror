@@ -725,3 +725,4 @@
 #define SDL_RWclose SDL_RWclose_REAL
 #define SDL_LoadFile SDL_LoadFile_REAL
 #define SDL_RecoverFromStopCont SDL_RecoverFromStopCont_REAL
+#define SDL_SuspendSink SDL_SuspendSink_REAL

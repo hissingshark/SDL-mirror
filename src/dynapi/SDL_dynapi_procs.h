@@ -781,3 +781,4 @@ SDL_DYNAPI_PROC(size_t,SDL_RWwrite,(SDL_RWops *a, const void *b, size_t c, size_
 SDL_DYNAPI_PROC(int,SDL_RWclose,(SDL_RWops *a),(a),return)
 SDL_DYNAPI_PROC(void*,SDL_LoadFile,(const char *a, size_t *b),(a,b),return)
 SDL_DYNAPI_PROC(void,SDL_RecoverFromStopCont,(void),(),)
+SDL_DYNAPI_PROC(void,SDL_SuspendSink,(SDL_bool suspend),(suspend),)

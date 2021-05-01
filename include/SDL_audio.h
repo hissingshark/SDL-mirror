@@ -848,6 +848,11 @@ extern DECLSPEC void SDLCALL SDL_UnlockAudioDevice(SDL_AudioDeviceID dev);
 extern DECLSPEC void SDLCALL SDL_CloseAudio(void);
 extern DECLSPEC void SDLCALL SDL_CloseAudioDevice(SDL_AudioDeviceID dev);
 
+/**
+ *  Suspend and resume the audio sink to share it during STOP/CONT operations
+ */
+extern DECLSPEC void SDLCALL SDL_SuspendSink(SDL_bool suspend);
+
 /* Ends C function definitions when using C++ */
 #ifdef __cplusplus
 }

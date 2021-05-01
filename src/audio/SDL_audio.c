@@ -28,6 +28,10 @@
 #include "SDL_sysaudio.h"
 #include "../thread/SDL_systhread.h"
 
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 #define _THIS SDL_AudioDevice *_this
 
 static SDL_AudioDriver current_audio;
@@ -1225,6 +1229,14 @@ open_audio_device(const char *devname, int iscapture,
     void *handle = NULL;
     int i = 0;
 
+    int shm = shm_open("sdl_audio_devices", O_RDWR, S_IRUSR | S_IWUSR);
+    if (shm == -1)
+       printf("Error: failed to open shared memory for devices\n");
+
+    //TODO check if it already existed first!
+    if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1)
+       printf("Error: failed to allocate shared memory for devices\n");
+
     if (!SDL_WasInit(SDL_INIT_AUDIO)) {
         SDL_SetError("Audio subsystem is not initialized");
         return 0;
@@ -1322,11 +1334,20 @@ open_audio_device(const char *devname, int iscapture,
         }
     }
 
+/*
     device = (SDL_AudioDevice *) SDL_calloc(1, sizeof (SDL_AudioDevice));
     if (device == NULL) {
         SDL_OutOfMemory();
         return 0;
     }
+*/
+    device = mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(SDL_AudioDevice)*id);
+    device->custom.iscapture = iscapture;
+    device->custom.desired = *desired;
+    device->custom.allowed_changes = allowed_changes;
+    device->custom.min_id = min_id;
+    device->custom.switching = SDL_FALSE;
+
     device->id = id + 1;
     device->spec = *obtained;
     device->iscapture = iscapture ? SDL_TRUE : SDL_FALSE;
@@ -1692,6 +1713,89 @@ SDL_MixAudio(Uint8 * dst, const Uint8 * src, Uint32 len, int volume)
     SDL_AudioDevice *device = get_audio_device(1);
     if (device != NULL) {
         SDL_MixAudioFormat(dst, src, device->callbackspec.format, len, volume);
+    }
+}
+
+
+/**
+ *  Suspend and resume the audio sink to share it during STOP/CONT operations
+ */
+void
+SDL_SuspendSink(SDL_bool suspend)
+{
+    SDL_AudioDevice *open_devices_tmp[16];
+    SDL_AudioDevice *disposible_device;
+//    SDL_AudioSpec obtained_spec;
+
+    int shm = shm_open("sdl_audio_devices", O_RDWR, S_IRUSR | S_IWUSR);
+    if (shm == -1)
+       printf("Error: failed to open shared memory for devices\n");
+
+    //TODO check if it already existed first!
+    if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1)
+       printf("Error: failed to allocate shared memory for devices\n");
+
+    // load devices from shm
+    for (int id=0; id<16; id++) {
+        open_devices[id] = mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(SDL_AudioDevice)*id);
+        if (open_devices[id]->custom.in_use == SDL_TRUE) {
+            // clone existing devices temporarily
+            open_devices_tmp[id] = (SDL_AudioDevice*) SDL_calloc(1, sizeof (SDL_AudioDevice));
+            *open_devices_tmp[id] = *open_devices[id];
+        }
+        else {
+            open_devices[id]->custom.in_use = SDL_FALSE;
+            munmap(open_devices[id], sizeof(SDL_AudioDevice));
+            open_devices[id] = NULL;
+            open_devices_tmp[id] = NULL;
+        }
+    }
+
+    if (suspend == SDL_FALSE) { // resume sink
+        for (int id=0; id<16; id++) {
+            if (open_devices_tmp[id]->custom.in_use == SDL_FALSE) {
+                open_devices[id]->custom.in_use = SDL_TRUE; // forces selection of next available slot
+            }
+            else {
+                current_audio.impl.OpenDevice(open_devices_tmp[id], open_devices_tmp[id]->handle, NULL, open_devices_tmp[id]->custom.iscapture);
+/*
+                // open device using original parameters
+                open_audio_device(NULL,
+                    open_devices_tmp[id]->custom.iscapture,
+                    &open_devices_tmp[id]->custom.desired,
+                    &obtained_spec,
+                    open_devices_tmp[id]->custom.allowed_changes,
+                    open_devices_tmp[id]->custom.min_id);
+                // copy new handle into original device data (the sole purpose of the re-open)
+                // delete created aux objects
+                // delete created device
+                // copy original device back to shm
+*/
+            }
+        }
+    }
+    else if (suspend == SDL_TRUE) { // suspend sink
+        for (int id=0; id<16; id++) {
+            if (open_devices[id] != NULL) {
+//            if (open_devices[id]->custom.in_use == SDL_TRUE) {
+                // copy to a disposible device because the original is an shm mmap
+                disposible_device = (SDL_AudioDevice*) SDL_calloc(1, sizeof(SDL_AudioDevice));
+                *disposible_device = *open_devices[id];
+/*
+                // NULLify pointers to circumvent closure of genuine objects or segfault (data is not in this address space)
+                disposible_device->thread = NULL;
+                disposible_device->mixer_lock = NULL;
+                disposible_device->work_buffer = NULL;
+                disposible_device->stream = NULL;
+                disposible_device->buffer_queue = NULL;
+                // hidden data to be handled by the ALSA specific code
+*/
+                disposible_device->custom.switching = SDL_TRUE; // tell pcm closing method not to try and free the hidden data
+                current_audio.impl.CloseDevice(disposible_device);
+                SDL_free(disposible_device);
+//                close_audio_device(disposible_device);
+            }
+        }
     }
 }
 

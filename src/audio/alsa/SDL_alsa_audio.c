@@ -38,6 +38,10 @@
 #include "../SDL_audio_c.h"
 #include "SDL_alsa_audio.h"
 
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 #ifdef SDL_AUDIO_DRIVER_ALSA_DYNAMIC
 #include "SDL_loadso.h"
 #endif
@@ -456,8 +460,14 @@ ALSA_CloseDevice(_THIS)
 
         ALSA_snd_pcm_close(this->hidden->pcm_handle);
     }
-    SDL_free(this->hidden->mixbuf);
-    SDL_free(this->hidden);
+
+    if (this->custom.switching == SDL_TRUE) {
+        munmap(this->hidden, sizeof(*this->hidden));
+    }
+    else {
+        SDL_free(this->hidden->mixbuf);
+        SDL_free(this->hidden);
+    }
 }
 
 static int
@@ -533,12 +543,24 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
 #endif
 
     /* Initialize all variables that we clean on shutdown */
+/*
     this->hidden = (struct SDL_PrivateAudioData *)
         SDL_malloc((sizeof *this->hidden));
     if (this->hidden == NULL) {
         return SDL_OutOfMemory();
     }
     SDL_zerop(this->hidden);
+*/
+    int shm = shm_open("sdl_audio_internal", O_RDWR, S_IRUSR | S_IWUSR);
+    if (shm == -1)
+       printf("Error: failed to open shared memory for devices\n");
+
+    //TODO check if it already existed first!
+    if (ftruncate(shm, sizeof(*this->hidden)*16) == -1)
+       printf("Error: failed to allocate shared memory for devices\n");
+
+    // load devices from shm
+    this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
 
     /* Open the audio device */
     /* Name of device should depend on # channels in spec */
@@ -694,14 +716,20 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
     /* Calculate the final parameters for this audio specification */
     SDL_CalculateAudioSpec(&this->spec);
 
-    /* Allocate mixing buffer */
-    if (!iscapture) {
-        this->hidden->mixlen = this->spec.size;
-        this->hidden->mixbuf = (Uint8 *) SDL_malloc(this->hidden->mixlen);
-        if (this->hidden->mixbuf == NULL) {
-            return SDL_OutOfMemory();
+    if (this->custom.switching == SDL_FALSE) {
+        /* Allocate mixing buffer */
+        if (!iscapture) {
+            this->hidden->mixlen = this->spec.size;
+            this->hidden->mixbuf = (Uint8 *) SDL_malloc(this->hidden->mixlen);
+            if (this->hidden->mixbuf == NULL) {
+                return SDL_OutOfMemory();
+            }
+            SDL_memset(this->hidden->mixbuf, this->spec.silence, this->hidden->mixlen);
         }
-        SDL_memset(this->hidden->mixbuf, this->spec.silence, this->hidden->mixlen);
+    }
+
+    if (this->custom.switching == SDL_TRUE) {
+        munmap(this->hidden, sizeof(*this->hidden));
     }
 
     #if !SDL_ALSA_NON_BLOCKING
