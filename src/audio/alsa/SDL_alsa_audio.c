@@ -451,6 +451,20 @@ ALSA_FlushCapture(_THIS)
 static void
 ALSA_CloseDevice(_THIS)
 {
+    void *hidden = this->hidden; // backup hidden address from original thread
+
+    if (this->custom.switching == SDL_TRUE) {  // temporarily load hidden data from shm
+        int shm = shm_open("sdl_audio_internal", O_RDWR, S_IRUSR | S_IWUSR);
+        if (shm == -1)
+           printf("Error: failed to open shared memory for devices\n");
+
+        //TODO check if it already existed first!
+        if (ftruncate(shm, sizeof(*this->hidden)*16) == -1)
+           printf("Error: failed to allocate shared memory for devices\n");
+
+        this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
+    }
+
     if (this->hidden->pcm_handle) {
         /* Wait for the submitted audio to drain
            ALSA_snd_pcm_drop() can hang, so don't use that.
@@ -463,6 +477,7 @@ ALSA_CloseDevice(_THIS)
 
     if (this->custom.switching == SDL_TRUE) {
         munmap(this->hidden, sizeof(*this->hidden));
+        this->hidden = hidden;
     }
     else {
         SDL_free(this->hidden->mixbuf);
@@ -551,6 +566,8 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
     }
     SDL_zerop(this->hidden);
 */
+    void *hidden = this->hidden; // backup hidden address in case it's from a pre-existing thread
+
     int shm = shm_open("sdl_audio_internal", O_RDWR, S_IRUSR | S_IWUSR);
     if (shm == -1)
        printf("Error: failed to open shared memory for devices\n");
@@ -575,6 +592,8 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
     }
 
     this->hidden->pcm_handle = pcm_handle;
+
+// TODO ?able to skip subsequent configuration as it may be information gathering rather than configuring ALSA
 
     /* Figure out what the hardware is capable of */
     snd_pcm_hw_params_alloca(&hwparams);
@@ -730,6 +749,7 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
 
     if (this->custom.switching == SDL_TRUE) {
         munmap(this->hidden, sizeof(*this->hidden));
+        this->hidden = hidden;
     }
 
     #if !SDL_ALSA_NON_BLOCKING
