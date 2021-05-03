@@ -453,14 +453,16 @@ ALSA_CloseDevice(_THIS)
 {
     void *hidden = this->hidden; // backup hidden address from original thread
 
+    errno = 0;
     if (this->custom.switching == SDL_TRUE) {  // temporarily load hidden data from shm
-        int shm = shm_open("sdl_audio_internal", O_RDWR, S_IRUSR | S_IWUSR);
+        int shm = shm_open("sdl_audio_internal", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
         if (shm == -1)
            printf("Error: failed to open shared memory for devices\n");
 
-        //TODO check if it already existed first!
-        if (ftruncate(shm, sizeof(*this->hidden)*16) == -1)
-           printf("Error: failed to allocate shared memory for devices\n");
+        if (errno != EEXIST) {
+            if (ftruncate(shm, sizeof(*this->hidden)*16) == -1)
+               printf("Error: failed to allocate shared memory for devices\n");
+        }
 
         this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
     }
@@ -568,13 +570,16 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
 */
     void *hidden = this->hidden; // backup hidden address in case it's from a pre-existing thread
 
-    int shm = shm_open("sdl_audio_internal", O_RDWR, S_IRUSR | S_IWUSR);
+    int shm;
+    errno = 0;
+    shm = shm_open("sdl_audio_internal", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
     if (shm == -1)
        printf("Error: failed to open shared memory for devices\n");
 
-    //TODO check if it already existed first!
-    if (ftruncate(shm, sizeof(*this->hidden)*16) == -1)
-       printf("Error: failed to allocate shared memory for devices\n");
+    if (errno != EEXIST) {
+        if (ftruncate(shm, sizeof(*this->hidden)*16) == -1)
+            printf("Error: failed to allocate shared memory for devices\n");
+    }
 
     // load devices from shm
     this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
