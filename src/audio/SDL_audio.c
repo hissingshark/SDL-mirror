@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <libexplain/mmap.h>
 
 #define _THIS SDL_AudioDevice *_this
 
@@ -1233,14 +1234,29 @@ open_audio_device(const char *devname, int iscapture,
 
     int shm;
     errno = 0;
-    shm = shm_open("sdl_audio_devices", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
-    if (shm == -1)
-       printf("Error: failed to open shared memory for devices\n");
-
-    if (errno != EEXIST) {
-        if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1)
-            printf("Error: failed to allocate shared memory for devices\n");
+    shm = shm_open("sdl_audio_devices", O_RDWR, S_IRUSR | S_IWUSR);
+    if (shm != -1) {
+        printf("SDL2: audio shm opened\n");
     }
+    else if (shm == -1 && errno == ENOENT) {
+        printf("SDL2: audio shm didn't exist\n");
+        shm = shm_open("sdl_audio_devices", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+        if (shm == -1) {
+            printf("SDL2 ERROR: couldn't create audio shm\n");
+            return 0;
+        }
+        else {
+            if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1) {
+                printf("SDL2 ERROR: opened but failed to allocate audio device shm\n");
+                return 0;
+            }
+            else {
+                printf("SDL2: opened and allocated audio device shm\n");
+            }
+        }
+    }
+    else
+        printf("SDL2 ERROR: unable to open audio device shm\n");
 
     if (!SDL_WasInit(SDL_INIT_AUDIO)) {
         SDL_SetError("Audio subsystem is not initialized");
@@ -1347,6 +1363,9 @@ open_audio_device(const char *devname, int iscapture,
     }
 */
     device = mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(SDL_AudioDevice)*id);
+//    printf("SDL2 ERROR: %s", explain_mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(SDL_AudioDevice)*id));
+//    device->iscapture = iscapture ? SDL_TRUE : SDL_FALSE;
+
     device->custom.iscapture = iscapture;
     device->custom.desired = *desired;
     device->custom.allowed_changes = allowed_changes;
@@ -1732,14 +1751,29 @@ SDL_SuspendSink(SDL_bool suspend)
 {
     int shm;
     errno = 0;
-    shm = shm_open("sdl_audio_devices", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
-    if (shm == -1)
-       printf("Error: failed to open shared memory for devices\n");
-
-    if (errno != EEXIST) {
-        if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1)
-           printf("Error: failed to allocate shared memory for devices\n");
+    shm = shm_open("sdl_audio_devices", O_RDWR, S_IRUSR | S_IWUSR);
+    if (shm != -1) {
+        printf("SDL2: audio shm opened\n");
     }
+    else if (shm == -1 && errno == ENOENT) {
+        printf("SDL2: audio shm didn't exist\n");
+        shm = shm_open("sdl_audio_devices", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+        if (shm == -1) {
+            printf("SDL2 ERROR: couldn't create audio shm\n");
+            return 0;
+        }
+        else {
+            if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1) {
+                printf("SDL2 ERROR: opened but failed to allocate audio device shm\n");
+                return 0;
+            }
+            else {
+                printf("SDL2: opened and allocated audio device shm\n");
+            }
+        }
+    }
+    else
+        printf("SDL2 ERROR: unable to open audio device shm\n");
 
     for (int id=0; id<16; id++) {
         open_devices[id] = mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(SDL_AudioDevice)*id);

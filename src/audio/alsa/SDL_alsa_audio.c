@@ -453,8 +453,34 @@ ALSA_CloseDevice(_THIS)
 {
     void *hidden = this->hidden; // backup hidden address from original thread
 
+    int shm;
     errno = 0;
     if (this->custom.switching == SDL_TRUE) {  // temporarily load hidden data from shm
+        shm = shm_open("sdl_audio_internal", O_RDWR, S_IRUSR | S_IWUSR);
+        if (shm != -1) {
+            printf("SDL2: hidden audio shm opened\n");
+        }
+        else if (shm == -1 && errno == ENOENT) {
+            printf("SDL2: hidden audio shm didn't exist\n");
+            shm = shm_open("sdl_audio_internal", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+            if (shm == -1) {
+                printf("SDL2 ERROR: couldn't create hidden audio shm\n");
+                return 0;
+            }
+            else {
+                if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1) {
+                    printf("SDL2 ERROR: opened but failed to allocate hidden audio device shm\n");
+                    return 0;
+                }
+                else {
+                    printf("SDL2: opened and allocated hidden audio device shm\n");
+                }
+            }
+        }
+        else
+            printf("SDL2 ERROR: unable to open hidden audio device shm\n");
+
+/*
         int shm = shm_open("sdl_audio_internal", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
         if (shm == -1)
            printf("Error: failed to open shared memory for devices\n");
@@ -463,7 +489,7 @@ ALSA_CloseDevice(_THIS)
             if (ftruncate(shm, sizeof(*this->hidden)*16) == -1)
                printf("Error: failed to allocate shared memory for devices\n");
         }
-
+*/
         this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
     }
 
@@ -572,6 +598,31 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
 
     int shm;
     errno = 0;
+    shm = shm_open("sdl_audio_internal", O_RDWR, S_IRUSR | S_IWUSR);
+    if (shm != -1) {
+        printf("SDL2: hidden audio shm opened\n");
+    }
+    else if (shm == -1 && errno == ENOENT) {
+        printf("SDL2: hidden audio shm didn't exist\n");
+        shm = shm_open("sdl_audio_internal", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+        if (shm == -1) {
+            printf("SDL2 ERROR: couldn't create hidden audio shm\n");
+            return 0;
+        }
+        else {
+            if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1) {
+                printf("SDL2 ERROR: opened but failed to allocate hidden audio device shm\n");
+                return 0;
+            }
+            else {
+                printf("SDL2: opened and allocated hidden audio device shm\n");
+            }
+        }
+    }
+    else
+        printf("SDL2 ERROR: unable to open hidden audio device shm\n");
+
+/*
     shm = shm_open("sdl_audio_internal", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
     if (shm == -1)
        printf("Error: failed to open shared memory for devices\n");
@@ -580,7 +631,7 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
         if (ftruncate(shm, sizeof(*this->hidden)*16) == -1)
             printf("Error: failed to allocate shared memory for devices\n");
     }
-
+*/
     // load devices from shm
     this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
 
