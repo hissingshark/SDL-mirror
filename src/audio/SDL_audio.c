@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <libexplain/mmap.h>
 
+
 #define _THIS SDL_AudioDevice *_this
 
 static SDL_AudioDriver current_audio;
@@ -1362,9 +1363,11 @@ open_audio_device(const char *devname, int iscapture,
         return 0;
     }
 */
-    device = mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(SDL_AudioDevice)*id);
-//    printf("SDL2 ERROR: %s", explain_mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(SDL_AudioDevice)*id));
-//    device->iscapture = iscapture ? SDL_TRUE : SDL_FALSE;
+    errno = 0;
+    device = mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, 4096*id);
+//    device = mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(SDL_AudioDevice)*(id-1));
+    fprintf(stderr, "SDL2 ERROR: id=%d\nsize=%d\noffset=%d\n%s\n", id, sizeof(SDL_AudioDevice), 4096*id, explain_mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, 4096*id));
+//    fprintf(stderr, "SDL2 ERROR: id=%d x %d %d\n%s\n", id, sizeof(SDL_AudioDevice), sizeof(SDL_AudioDevice)*(id-1), explain_mmap(NULL, sizeof(SDL_AudioDevice), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(SDL_AudioDevice)*(id-1)));
 
     device->custom.iscapture = iscapture;
     device->custom.desired = *desired;
@@ -1760,12 +1763,12 @@ SDL_SuspendSink(SDL_bool suspend)
         shm = shm_open("sdl_audio_devices", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
         if (shm == -1) {
             printf("SDL2 ERROR: couldn't create audio shm\n");
-            return 0;
+            //return 0;
         }
         else {
             if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1) {
                 printf("SDL2 ERROR: opened but failed to allocate audio device shm\n");
-                return 0;
+                //return 0;
             }
             else {
                 printf("SDL2: opened and allocated audio device shm\n");

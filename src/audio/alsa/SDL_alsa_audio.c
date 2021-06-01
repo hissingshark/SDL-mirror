@@ -41,6 +41,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <libexplain/mmap.h>
 
 #ifdef SDL_AUDIO_DRIVER_ALSA_DYNAMIC
 #include "SDL_loadso.h"
@@ -465,15 +466,15 @@ ALSA_CloseDevice(_THIS)
             shm = shm_open("sdl_audio_internal", O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
             if (shm == -1) {
                 printf("SDL2 ERROR: couldn't create hidden audio shm\n");
-                return 0;
+                //return 0;
             }
             else {
-                if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1) {
+                if (ftruncate(shm, sizeof(*this->hidden)*16) == -1) {
                     printf("SDL2 ERROR: opened but failed to allocate hidden audio device shm\n");
-                    return 0;
+                    //return 0;
                 }
                 else {
-                    printf("SDL2: opened and allocated hidden audio device shm\n");
+                    printf("SDL2: opened and allocated %dx16 bytes (%d) to hidden audio device shm\n", sizeof(*this->hidden), sizeof(*this->hidden)*16);
                 }
             }
         }
@@ -490,7 +491,11 @@ ALSA_CloseDevice(_THIS)
                printf("Error: failed to allocate shared memory for devices\n");
         }
 */
-        this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
+errno = 0;
+        this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, 4096*(this->id-1));
+//        this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
+fprintf(stderr, "SDL2 ERROR @ close device:\nid = %d\n%s\n", this->id, explain_mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, 4096*(this->id-1)));
+//fprintf(stderr, "SDL2 ERROR @ close device:\nid = %d\n%s\n", this->id, explain_mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden)*(this->id-1)));
     }
 
     if (this->hidden->pcm_handle) {
@@ -594,7 +599,8 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
     }
     SDL_zerop(this->hidden);
 */
-    void *hidden = this->hidden; // backup hidden address in case it's from a pre-existing thread
+    struct SDL_PrivateAudioData *hidden = this->hidden; // backup hidden address in case it's from a pre-existing thread
+//    void *hidden = this->hidden; // backup hidden address in case it's from a pre-existing thread
 
     int shm;
     errno = 0;
@@ -610,12 +616,13 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
             return 0;
         }
         else {
-            if (ftruncate(shm, sizeof(SDL_AudioDevice)*16) == -1) {
+            if (ftruncate(shm, sizeof(*this->hidden)*16) == -1) {
                 printf("SDL2 ERROR: opened but failed to allocate hidden audio device shm\n");
                 return 0;
             }
             else {
-                printf("SDL2: opened and allocated hidden audio device shm\n");
+                    printf("SDL2: opened and allocated %dx16 bytes (%d) to hidden audio device shm\n", sizeof(*this->hidden), sizeof(*this->hidden)*16);
+//                printf("SDL2: opened and allocated hidden audio device shm\n");
             }
         }
     }
@@ -633,7 +640,11 @@ ALSA_OpenDevice(_THIS, void *handle, const char *devname, int iscapture)
     }
 */
     // load devices from shm
-    this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
+errno = 0;
+    this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, 4096*(this->id-1));
+//    this->hidden = mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden) * (this->id-1));
+fprintf(stderr, "SDL2 ERROR @ open device:\nid = %d\n%s\n", sizeof(*this->hidden) * (this->id-1), explain_mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, 4096*(this->id-1)));
+//fprintf(stderr, "SDL2 ERROR @ open device:\nid = %d\n%s\n", sizeof(*this->hidden) * (this->id-1), explain_mmap(NULL, sizeof(*this->hidden), PROT_READ | PROT_WRITE, MAP_SHARED, shm, sizeof(*this->hidden)*(this->id-1)));
 
     /* Open the audio device */
     /* Name of device should depend on # channels in spec */
